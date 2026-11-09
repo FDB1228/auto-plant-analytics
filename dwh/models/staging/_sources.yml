@@ -1,0 +1,63 @@
+version: 2
+
+sources:
+  - name: plant
+    description: Операционная БД завода (MES). Нормализованная схема, источник истины по производству.
+    schema: plant
+    tables:
+      - name: workshops
+      - name: section_types
+      - name: sections
+      - name: professions
+      - name: employees
+        loaded_at_field: updated_at
+      - name: worker_details
+      - name: itr_details
+      - name: brigades
+      - name: brigade_memberships
+      - name: brigade_leaders
+      - name: management_roles
+      - name: management_assignments
+      - name: product_categories
+      - name: category_attributes
+      - name: product_models
+      - name: model_attribute_values
+      - name: work_types
+      - name: route_steps
+      - name: units
+        loaded_at_field: updated_at
+        freshness:
+          warn_after: {count: 2, period: day}
+      - name: operations
+      - name: downtime_reasons
+      - name: section_downtimes
+      - name: labs
+      - name: lab_workshops
+      - name: test_types
+      - name: equipment
+      - name: lab_staff
+      - name: tests
+      - name: test_equipment
+      - name: defect_types
+      - name: defects
+      - name: dealers
+      - name: shipments
+
+  - name: raw
+    description: Сырые выгрузки внешних систем, загруженные пайплайном ingest (все поля - text).
+    schema: raw
+    tables:
+      - name: erp_production_plan
+        description: План производства из ERP. Каждая версия плана - отдельный CSV-файл.
+        loaded_at_field: _loaded_at
+        freshness:
+          warn_after: {count: 35, period: day}
+      - name: dealer_warranty_claims
+        description: >
+          Гарантийные обращения с дилерского портала (еженедельный JSON). Одна заявка
+          приходит минимум дважды (подача и решение), встречаются полные дубли, VIN в нижнем
+          регистре и с пробелами, даты в двух форматах, суммы строкой в русском формате.
+        loaded_at_field: _loaded_at
+        freshness:
+          warn_after: {count: 8, period: day}
+      - name: load_log

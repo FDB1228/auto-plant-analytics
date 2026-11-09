@@ -1,0 +1,40 @@
+# PostgreSQL 16 + контейнер пайплайна.
+#   docker compose up -d db                       - поднять только базу (для локальной разработки)
+#   docker compose run --rm pipeline make all     - полный прогон внутри контейнера
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: plant
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      TZ: Europe/Moscow
+      PGTZ: Europe/Moscow
+    command: ["postgres", "-c", "timezone=Europe/Moscow"]
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d plant"]
+      interval: 5s
+      retries: 10
+
+  pipeline:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGHOST: db
+      PGPORT: 5432
+      PGDATABASE: plant
+      PGUSER: postgres
+      PGPASSWORD: postgres
+    volumes:
+      - .:/app
+    working_dir: /app
+    command: ["make", "all"]
+
+volumes:
+  pgdata:

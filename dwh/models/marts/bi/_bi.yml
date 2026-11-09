@@ -1,0 +1,80 @@
+version: 2
+
+models:
+  - name: mart_daily_workshop_kpi
+    description: Ежедневные KPI цехов (выпуск, FPY, доработки, простои, выручка) - основа операционного дашборда.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [date_day, workshop_id]
+
+  - name: mart_quality_brigade_month
+    description: Дефектность и кадровый состав бригад по месяцам - для анализа первопричин брака.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [month_start, brigade_id]
+    columns:
+      - name: defect_rate
+        data_tests:
+          - between:
+              arguments: {min_value: 0, max_value: 1}
+
+  - name: mart_copq_monthly
+    description: Стоимость низкого качества (внутренние доработки + гарантия) по цехам и месяцам.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [month_start, workshop_id]
+
+  - name: mart_welding_pilot
+    description: Участок × месяц для оценки пилота стандарта сварки WS-2 методом разности разностей.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [month_start, section_id]
+
+  - name: mart_warranty_cohorts
+    description: Таблица дожития гарантийных когорт с учётом цензурирования.
+    columns:
+      - name: cumulative_claim_rate
+        data_tests:
+          - between:
+              arguments: {min_value: 0, max_value: 1}
+
+  - name: mart_downtime_monthly
+    description: Простои участков по месяцам и причинам.
+
+exposures:
+  - name: dashboard_production_quality
+    label: Дашборд «Производство и качество» (DataLens / Power BI)
+    type: dashboard
+    maturity: high
+    url: https://datalens.yandex.ru
+    description: >
+      Операционный дашборд для директора по производству и ОТК: выпуск и план-факт,
+      FPY, дефектность бригад, стоимость низкого качества, простои, гарантийные когорты.
+    depends_on:
+      - ref('mart_daily_workshop_kpi')
+      - ref('mart_quality_brigade_month')
+      - ref('mart_copq_monthly')
+      - ref('mart_warranty_cohorts')
+      - ref('mart_downtime_monthly')
+      - ref('fct_production_plan')
+      - ref('fct_units')
+    owner:
+      name: Святослав Тихомиров
+
+  - name: analysis_notebooks
+    label: Аналитические ноутбуки (EDA, первопричины, пилот WS-2, гарантия)
+    type: notebook
+    maturity: high
+    depends_on:
+      - ref('fct_operations')
+      - ref('fct_units')
+      - ref('fct_tests')
+      - ref('fct_defects')
+      - ref('mart_welding_pilot')
+      - ref('mart_quality_brigade_month')
+    owner:
+      name: Святослав Тихомиров

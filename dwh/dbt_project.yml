@@ -1,0 +1,57 @@
+name: plant_dwh
+version: "1.0.0"
+config-version: 2
+profile: plant_dwh
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+snapshot-paths: ["snapshots"]
+test-paths: ["tests"]
+macro-paths: ["macros"]
+analysis-paths: ["analyses"]
+target-path: "target"
+clean-targets: ["target", "dbt_packages", "logs"]
+
+vars:
+  # дефекты, которые должен обнаруживать динамический стенд (испытание DYN)
+  dyn_defect_codes: ['ASM-TRQ', 'ASM-LEAK', 'ASM-BRK', 'FIN-ADJ']
+
+models:
+  plant_dwh:
+    staging:
+      +schema: staging
+      +materialized: view
+    intermediate:
+      +schema: intermediate
+      +materialized: table
+    marts:
+      +schema: marts
+      +materialized: table
+      core:
+        +docs:
+          node_color: "#1f6f8b"
+      bi:
+        +docs:
+          node_color: "#d4a017"
+
+seeds:
+  plant_dwh:
+    +schema: staging
+    ru_holidays:
+      +column_types:
+        holiday_date: date
+    cost_parameters:
+      +column_types:
+        value: numeric
+    ws2_pilot:
+      +column_types:
+        pilot_start: date
+
+snapshots:
+  plant_dwh:
+    +target_schema: snapshots
+
+data_tests:
+  plant_dwh:
+    +store_failures: true
+    +schema: dq

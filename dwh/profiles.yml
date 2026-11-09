@@ -1,0 +1,12 @@
+plant_dwh:
+  target: dev
+  outputs:
+    dev:
+      type: postgres
+      host: "{{ env_var('PGHOST', 'localhost') }}"
+      port: "{{ env_var('PGPORT', '5432') | as_number }}"
+      user: "{{ env_var('PGUSER', 'postgres') }}"
+      password: "{{ env_var('PGPASSWORD', 'postgres') }}"
+      dbname: "{{ env_var('PGDATABASE', 'plant') }}"
+      schema: marts
+      threads: 4

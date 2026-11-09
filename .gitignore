@@ -1,0 +1,15 @@
+# сгенерированные данные (воспроизводятся командой make generate)
+data/
+# dbt
+dwh/target/
+dwh/dbt_packages/
+dwh/logs/
+logs/
+# python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+.ipynb_checkpoints/
+# окружение
+.env

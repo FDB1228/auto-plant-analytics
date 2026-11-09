@@ -1,0 +1,151 @@
+// =====================================================================
+//  Меры Power BI для модели «Производство и качество»
+//  Создайте пустую таблицу _Measures (Enter data -> одна пустая колонка) и добавьте меры в неё.
+//  Папки отображения (Display folder) указаны в комментариях.
+//  Связи модели - см. README.md (fct_units[accepted_date] -> dim_date активная,
+//  fct_units[shipped_date] -> dim_date неактивная).
+// =====================================================================
+
+// ---------- 01 Выпуск ----------
+Принято шт =
+CALCULATE ( COUNTROWS ( fct_units ), NOT ISBLANK ( fct_units[accepted_date] ) )
+
+Запущено шт =
+CALCULATE (
+    COUNTROWS ( fct_units ),
+    USERELATIONSHIP ( fct_units[start_date], dim_date[date_day] )
+)
+
+Отгружено шт =
+CALCULATE (
+    COUNTROWS ( fct_units ),
+    USERELATIONSHIP ( fct_units[shipped_date], dim_date[date_day] ),
+    NOT ISBLANK ( fct_units[shipped_date] )
+)
+
+Выручка ₽ =
+CALCULATE (
+    SUM ( fct_units[price_rub] ),
+    USERELATIONSHIP ( fct_units[shipped_date], dim_date[date_day] )
+)
+
+План шт = SUM ( fct_production_plan[planned_qty] )
+
+Факт к плану шт = SUM ( fct_production_plan[accepted_qty] )
+
+Выполнение плана % = DIVIDE ( [Факт к плану шт], [План шт] )
+
+Выполнение плана 3М % =
+VAR _end = MAX ( dim_date[date_day] )
+RETURN
+    CALCULATE (
+        DIVIDE ( [Факт к плану шт], [План шт] ),
+        DATESINPERIOD ( dim_date[date_day], _end, -3, MONTH )
+    )
+
+// Статус для условного форматирования и иконки (цвет никогда не единственный носитель смысла)
+Статус плана =
+SWITCH (
+    TRUE (),
+    ISBLANK ( [Выполнение плана %] ), BLANK (),
+    [Выполнение плана %] >= 0.97, "✔ в плане",
+    [Выполнение плана %] >= 0.90, "▲ отставание",
+    "✖ срыв"
+)
+
+// ---------- 02 Качество ----------
+FPY % =
+DIVIDE (
+    CALCULATE ( COUNTROWS ( fct_units ), fct_units[is_first_pass] = TRUE () ),
+    [Принято шт]
+)
+
+FPY Δ к пред. месяцу п.п. =
+VAR _prev = CALCULATE ( [FPY %], DATEADD ( dim_date[date_day], -1, MONTH ) )
+RETURN IF ( NOT ISBLANK ( _prev ), ( [FPY %] - _prev ) * 100 )
+
+FPY 3М скользящий % =
+CALCULATE ( [FPY %], DATESINPERIOD ( dim_date[date_day], MAX ( dim_date[date_day] ), -3, MONTH ) )
+
+Дефектов на линии = CALCULATE ( COUNTROWS ( fct_defects ), fct_defects[detection_point] = "line" )
+
+Дефектов на испытаниях = CALCULATE ( COUNTROWS ( fct_defects ), fct_defects[detection_point] = "test" )
+
+Доля дефектов, пропущенных линией % =
+DIVIDE ( [Дефектов на испытаниях], [Дефектов на линии] + [Дефектов на испытаниях] )
+
+Операций (бригады) = SUM ( mart_quality_brigade_month[operations] )
+
+Дефектность операций % =
+DIVIDE ( SUM ( mart_quality_brigade_month[defect_operations] ), [Операций (бригады)] )
+
+// средневзвешенная по числу операций - простое среднее по месяцам исказило бы картину
+Доля новичков в бригаде % =
+DIVIDE (
+    SUMX ( mart_quality_brigade_month,
+           mart_quality_brigade_month[avg_newcomer_share] * mart_quality_brigade_month[operations] ),
+    [Операций (бригады)]
+)
+
+Медиана цикла ч =
+MEDIANX ( FILTER ( fct_units, NOT ISBLANK ( fct_units[total_lead_time_h] ) ), fct_units[total_lead_time_h] )
+
+P90 цикла ч =
+PERCENTILEX.INC ( FILTER ( fct_units, NOT ISBLANK ( fct_units[total_lead_time_h] ) ), fct_units[total_lead_time_h], 0.9 )
+
+// ---------- 03 Стоимость качества ----------
+Доработки ₽ = SUM ( fct_defects[rework_cost_rub] )
+
+Гарантия ₽ = SUM ( fct_warranty_claims[approved_amount_rub] )
+
+COPQ ₽ = [Доработки ₽] + [Гарантия ₽]
+
+COPQ % выручки = DIVIDE ( [COPQ ₽], [Выручка ₽] )
+
+COPQ на изделие ₽ = DIVIDE ( [COPQ ₽], [Принято шт] )
+
+Гарантийных заявок =
+CALCULATE ( COUNTROWS ( fct_warranty_claims ), fct_warranty_claims[status] <> "rejected" )
+
+// ---------- 04 Пилот WS-2 ----------
+// Отбор по участку / группе - через dim_section (ws2_group) или поля mart_welding_pilot
+Дефектность сварки % =
+DIVIDE ( SUM ( mart_welding_pilot[defect_operations] ), SUM ( mart_welding_pilot[operations] ) )
+
+DiD абсолютный п.п. =
+VAR _pp = CALCULATE ( [Дефектность сварки %], mart_welding_pilot[ws2_group] = "pilot",   mart_welding_pilot[is_post_period] = TRUE () )
+VAR _p0 = CALCULATE ( [Дефектность сварки %], mart_welding_pilot[ws2_group] = "pilot",   mart_welding_pilot[is_post_period] = FALSE () )
+VAR _cp = CALCULATE ( [Дефектность сварки %], mart_welding_pilot[ws2_group] = "control", mart_welding_pilot[is_post_period] = TRUE () )
+VAR _c0 = CALCULATE ( [Дефектность сварки %], mart_welding_pilot[ws2_group] = "control", mart_welding_pilot[is_post_period] = FALSE () )
+RETURN ( ( _pp - _p0 ) - ( _cp - _c0 ) ) * 100
+
+DiD относительный % =
+VAR _pp = CALCULATE ( [Дефектность сварки %], mart_welding_pilot[ws2_group] = "pilot",   mart_welding_pilot[is_post_period] = TRUE () )
+VAR _p0 = CALCULATE ( [Дефектность сварки %], mart_welding_pilot[ws2_group] = "pilot",   mart_welding_pilot[is_post_period] = FALSE () )
+VAR _cp = CALCULATE ( [Дефектность сварки %], mart_welding_pilot[ws2_group] = "control", mart_welding_pilot[is_post_period] = TRUE () )
+VAR _c0 = CALCULATE ( [Дефектность сварки %], mart_welding_pilot[ws2_group] = "control", mart_welding_pilot[is_post_period] = FALSE () )
+RETURN DIVIDE ( DIVIDE ( _pp, _p0 ), DIVIDE ( _cp, _c0 ) ) - 1
+
+Время сварки к нормативу =
+DIVIDE (
+    SUMX ( mart_welding_pilot, mart_welding_pilot[avg_duration_to_std] * mart_welding_pilot[operations] ),
+    SUM ( mart_welding_pilot[operations] )
+)
+
+// ---------- 05 Гарантия и испытания ----------
+// Утечка после динамического стенда: изделия, у которых дефект тормозов/ходовой нашли позже
+Утечка после стенда на 1000 =
+DIVIDE (
+    CALCULATE ( COUNTROWS ( fct_units ), fct_units[leaked_after_dyn] = TRUE () ),
+    CALCULATE ( COUNTROWS ( fct_units ), NOT ISBLANK ( fct_units[dyn_lab_id] ) )
+) * 1000
+
+Накопленная доля гарантийных случаев % = MAX ( mart_warranty_cohorts[cumulative_claim_rate] )
+
+// ---------- 06 Простои ----------
+Простои ч = SUM ( mart_downtime_monthly[downtime_hours] )
+
+Внеплановые простои ч =
+CALCULATE ( [Простои ч], mart_downtime_monthly[is_planned] = FALSE () )
+
+Доля внеплановых % = DIVIDE ( [Внеплановые простои ч], [Простои ч] )

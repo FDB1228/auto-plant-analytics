@@ -1,0 +1,90 @@
+version: 2
+
+models:
+  - name: stg_plant__units
+    description: Экземпляры изделий (одна строка = одна машина с VIN).
+    columns:
+      - name: unit_id
+        data_tests: [unique, not_null]
+      - name: serial_no
+        data_tests: [unique, not_null]
+      - name: status
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [in_progress, testing, accepted, shipped]
+
+  - name: stg_plant__operations
+    description: Операции маршрута, включая доработки (attempt_no > 1).
+    columns:
+      - name: operation_id
+        data_tests: [unique, not_null]
+      - name: duration_min
+        data_tests:
+          - between:
+              arguments: {min_value: 1, max_value: 3000}
+      - name: shift
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [day, night]
+
+  - name: stg_plant__defects
+    columns:
+      - name: defect_id
+        data_tests: [unique, not_null]
+      - name: detection_point
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [line, test]
+
+  - name: stg_plant__tests
+    columns:
+      - name: test_id
+        data_tests: [unique, not_null]
+
+  - name: stg_plant__employees
+    columns:
+      - name: employee_id
+        data_tests: [unique, not_null]
+      - name: skill_grade
+        description: Разряд рабочего (только для рабочих)
+        data_tests:
+          - not_null:
+              config:
+                where: "staff_category = 'worker'"
+
+  - name: stg_erp__production_plan
+    description: План производства из ERP, все версии.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [plan_month, model_code, plan_version]
+    columns:
+      - name: planned_qty
+        data_tests:
+          - not_null
+          - between:
+              arguments: {min_value: 0, max_value: 2000}
+
+  - name: stg_dealer__warranty_claims
+    description: >
+      Гарантийные обращения после очистки. Одна заявка может иметь несколько записей
+      (submitted -> approved/rejected); итоговое состояние - в int_warranty_claims_current.
+    columns:
+      - name: claim_id
+        data_tests: [not_null]
+      - name: vin
+        data_tests:
+          - not_null
+          - expression_is_true:
+              arguments:
+                expression: "length(vin) = 17"
+      - name: claim_date
+        data_tests: [not_null]
+      - name: status
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [submitted, approved, rejected]
