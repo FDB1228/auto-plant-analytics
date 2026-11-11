@@ -1,0 +1,5 @@
+# Статистика языков GitHub: ноутбуки - отчётные материалы (тяжёлые из-за графиков),
+# основной код проекта - Python и SQL
+*.ipynb   linguist-documentation
+*.sql     linguist-language=SQL
+bi/exports/*.csv linguist-generated
